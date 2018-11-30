@@ -3,7 +3,7 @@
 - **Notice**: ONLY packet in was done in this repo.
 
 - Usage: with ONOS
-`python client.py --device bmv2 --p4info "/home/sdn/onos/pipelines/basic/src/main/resources/p4c-out/bmv2/basic.p4io" --cpu-port 255`
+`python client.py --device bmv2 --p4info "/home/sdn/onos/pipelines/basic/src/main/resources/p4c-out/bmv2/basic.p4info" --cpu-port 255`
 
 - Clients I found:
     - Python: I ref code in [1] for this program. [2] uses the very old version P4runtime.proto but it's OK for simple demo.
