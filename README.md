@@ -2,6 +2,9 @@
 
 - **Notice**: ONLY packet in was done in this repo.
 
+- Usage: with ONOS
+`python client.py --device bmv2 --p4info "/home/sdn/onos/pipelines/basic/src/main/resources/p4c-out/bmv2/basic.p4io" --cpu-port 255`
+
 - Clients I found:
     - Python: I ref code in [1] for this program. [2] uses the very old version P4runtime.proto but it's OK for simple demo.
     - C++: [3] uses simple_switch(not simple_swithc_grpc) as simulation environment, which use nanomsg for Packet IO(i.e. packet in/out). Currently, Packet IO is transmit with [grpc stream](https://github.com/p4lang/p4runtime/blob/4650de4734376e33357da1662e2635930342c876/proto/p4/v1/p4runtime.proto#L513)
