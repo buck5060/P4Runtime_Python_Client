@@ -89,10 +89,26 @@ def main():
 
     try:
 	print "Try to connect to P4Runtime Server"
-        s1 = P4RuntimeClient(grpc_addr = args.grpc_addr, device_id = args.device_id, cpu_port = args.cpu_port)
-	while 1:	
+        s1 = P4RuntimeClient(grpc_addr = args.grpc_addr, device_id = args.device_id, cpu_port = args.cpu_port, p4info_path = args.p4info)
+	was_packetin = 0
+	wrote = 0
+	while 1:
 		packetin = s1.get_packet_in()
+		if was_packetin and not packetin and not wrote:
+			# Set flow rule to tableNCS
+            		print "Insert entry"
+            		req = s1.get_new_write_request()
+            		s1.push_update_add_entry_to_action(
+            		    req,
+            		    "ingress.tableNCS_control.tableNCS",
+            		    [s1.Ternary("hdr.ipv4.protocol", '\x01', '\xff')],
+            		    #"_drop", [], 70000)
+            		    "tableNCS_control.set_egress_port", [("port", b'\x00\x03')], 100)
+            		s1.write_request(req)
+			wrote = 1			
+		was_packetin = 0
 		if packetin:
+			was_packetin = 1
 			# Print Packet from CPU_PORT of Switch
 			print " ".join("{:02x}".format(ord(c)) for c in packetin.payload)
 			
