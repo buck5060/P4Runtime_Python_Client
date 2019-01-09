@@ -1,7 +1,7 @@
 # P4Runtime Python Client
 
 - Usage: with ONOS
-`python client.py --device bmv2 --p4info "/home/sdn/onos/pipelines/basic/src/main/resources/p4c-out/bmv2/basic.p4io" --cpu-port 255 --grpc-addr 127.0.0.1:$(cat /tmp/bmv2-s1-grpc-port)`
+`python client.py --device bmv2 --p4info "/home/sdn/onos/pipelines/basic/src/main/resources/p4c-out/bmv2/basic.p4info" --cpu-port 255 --grpc-addr 127.0.0.1:$(cat /tmp/bmv2-s1-grpc-port)`
 
 - Clients I found:
     - Python: I ref code in [1] for this program. [2] uses the very old version P4runtime.proto but it's OK for simple demo.
