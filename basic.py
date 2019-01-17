@@ -141,6 +141,8 @@ class P4RuntimeClient():
         with open(p4info_path, "rb") as fin:
             google.protobuf.text_format.Merge(fin.read(), self.p4info)
 
+        self.role_config = "{\"entryList\":[{\"entryName\":\"UserPipeline1\",\"shared\":\"1\"}]}"
+
         self.import_p4info_names()
 
         # used to store write requests sent to the P4Runtime server, useful for
@@ -194,6 +196,9 @@ class P4RuntimeClient():
         req = p4runtime_pb2.StreamMessageRequest()
         arbitration = req.arbitration
         arbitration.device_id = self.device_id
+        role = arbitration.role
+        role.id = self.role_id
+        #role.config = self.role_config
         election_id = arbitration.election_id
         election_id.high = 0
         election_id.low = self.election_id
