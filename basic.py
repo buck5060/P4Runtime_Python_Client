@@ -117,7 +117,7 @@ class P4RuntimeWriteException(Exception):
                 p4_error.canonical_code].name
             message += "\t* At index {}: {}, '{}'\n".format(
                 idx, code_name, p4_error.message)
-	return message
+        return message
 
 class P4RuntimeClient():
     def __init__(self, grpc_addr, device_id , cpu_port, p4info_path):
@@ -140,8 +140,6 @@ class P4RuntimeClient():
         self.p4info = p4info_pb2.P4Info()
         with open(p4info_path, "rb") as fin:
             google.protobuf.text_format.Merge(fin.read(), self.p4info)
-
-        self.role_config = "{\"entryList\":[{\"entryName\":\"UserPipeline1\",\"shared\":\"1\"}]}"
 
         self.import_p4info_names()
 
@@ -190,20 +188,19 @@ class P4RuntimeClient():
             target=stream_recv, args=(self.stream,))
         self.stream_recv_thread.start()
 
-        self.handshake()
-
-    def handshake(self):
+    def handshake(self, roleconfig):
         req = p4runtime_pb2.StreamMessageRequest()
         arbitration = req.arbitration
         arbitration.device_id = self.device_id
-        role = arbitration.role
-        role.id = self.role_id
-        #role.config = self.role_config
+        if roleconfig is not None:
+           role = arbitration.role
+           role.id = self.role_id
+           role.config.Pack(roleconfig)
         election_id = arbitration.election_id
         election_id.high = 0
         election_id.low = self.election_id
         self.stream_out_q.put(req)
-	
+
         rep = self.get_stream_packet("arbitration", timeout=2)
         if rep is None:
             print("Failed to establish handshake")
@@ -214,8 +211,8 @@ class P4RuntimeClient():
     def tear_down_stream(self):
         self.stream_out_q.put(None)
         self.stream_recv_thread.join()
-	sys.exit(0)
-	
+        sys.exit(0)
+
     # --- Packet IO ---
 
     def get_packet_in(self, timeout=2):
@@ -223,7 +220,7 @@ class P4RuntimeClient():
         if msg is None:
             print("Packet in not received")
         else:
-	    print("Packet mon Getcha !")
+            print("Packet mon Getcha !")
             return msg.packet
 
     def get_stream_packet(self, type_, timeout=1):
@@ -247,6 +244,19 @@ class P4RuntimeClient():
         self.stream_out_q.put(packet_out_req)
 
    # --- Packet IO End ---
+
+   # --- Role.config ---
+    def get_new_roleconfig(self):
+        config = p4runtime_pb2.RoleConfig()
+        return config
+
+    def add_roleconfig_entry(self, config, table_name, isShared):
+        entry = config.entries.add()
+        entry.shared = isShared
+        table_entry = entry.entity.table_entry
+        table_entry.table_id = self.get_table_id(table_name)
+
+   # --- End of Role ---
 
    # --- Table ---
 
@@ -384,7 +394,7 @@ class P4RuntimeClient():
     # Sets the action & action data for a p4::TableEntry object. params needs to
     # be an iterable object of 2-tuples (<param_name>, <value>).
     def set_action_entry(self, table_entry, a_name, params):
-	self.set_action(table_entry.action.action, a_name, params)
+        self.set_action(table_entry.action.action, a_name, params)
 
     def get_new_write_request(self):
         req = p4runtime_pb2.WriteRequest()
@@ -393,7 +403,7 @@ class P4RuntimeClient():
         election_id = req.election_id
         election_id.high = 0
         election_id.low = self.election_id
-	return req
+        return req
 
     def push_update_add_entry_to_action(self, req, t_name, mk, a_name, params, priority):
         update = req.updates.add()
@@ -405,13 +415,13 @@ class P4RuntimeClient():
             table_entry.is_default_action = True
         else:
             self.set_match_key(table_entry, t_name, mk)
-	self.set_action_entry(table_entry, a_name, params)
+        self.set_action_entry(table_entry, a_name, params)
 
     def write_request(self, req, store=True):
         rep = self._write(req)
         if store:
             self.reqs.append(req)
-	return rep
+        return rep
 
     def _write(self, req):
         try:
@@ -419,7 +429,7 @@ class P4RuntimeClient():
         except grpc.RpcError as e:
             if e.code() != grpc.StatusCode.UNKNOWN:
                 raise e
-	#    raise P4RuntimeWriteException(e)
+   #    raise P4RuntimeWriteException(e)
 
    # --- Table End ---
 
@@ -438,4 +448,4 @@ for obj_type, nickname in [("tables", "table"),
         P4RuntimeClient.get_obj, obj_type))
     name = "_".join(["get", nickname, "id"])
     setattr(P4RuntimeClient, name, partialmethod(
-	P4RuntimeClient.get_obj_id, obj_type))
+    P4RuntimeClient.get_obj_id, obj_type))

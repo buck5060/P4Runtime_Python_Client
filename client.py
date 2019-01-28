@@ -88,93 +88,101 @@ def main():
     # grpc_port = args.grpc_addr.split(':')[1]
 
     try:
-	print "Try to connect to P4Runtime Server"
-        s1 = P4RuntimeClient(grpc_addr = args.grpc_addr, device_id = args.device_id, cpu_port = args.cpu_port, p4info_path = args.p4info)
+        print "Try to connect to P4Runtime Server"
+        s1 = P4RuntimeClient(grpc_addr = args.grpc_addr, 
+                             device_id = args.device_id, 
+                             cpu_port = args.cpu_port, 
+                             p4info_path = args.p4info)
 
-	# Set Permission ACL
-	print "Insert Ingress Permission ACL entry - Ingress Port == 1 role_id == 1"
-	req = s1.get_new_write_request()
-	s1.push_update_add_entry_to_action(
-	    req,
-	    "ingress.permission_acl_ingress.permission_acl_ingress_table",
-	    [s1.Ternary("standard_metadata.ingress_port", '\x00\x01', '\x01\xff')],
-	    "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
-	s1.write_request(req)
+        roleconfig = s1.get_new_roleconfig()
+        s1.add_roleconfig_entry(roleconfig, "ingress.table0_control.table0", 1)
+        s1.add_roleconfig_entry(roleconfig, "ingress.table1_control.table1", 1)
+        s1.handshake(roleconfig)
 
-	print "Insert Ingress Permission ACL entry - Ingress Port == 2 role_id == 1"
-	req = s1.get_new_write_request()
-	s1.push_update_add_entry_to_action(
-	    req,
-	    "ingress.permission_acl_ingress.permission_acl_ingress_table",
-	    [s1.Ternary("standard_metadata.ingress_port", '\x00\x02', '\x01\xff')],
-	    "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
-	s1.write_request(req)
+        # Set Permission ACL
+        print "Insert Ingress Permission ACL entry - Ingress Port == 1 role_id == 1"
+        req = s1.get_new_write_request()
+        s1.push_update_add_entry_to_action(
+            req,
+            "ingress.permission_acl_ingress.permission_acl_ingress_table",
+            [s1.Ternary("standard_metadata.ingress_port", '\x00\x01', '\x01\xff')],
+            "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
+        s1.write_request(req)
 
-	print "Insert Egress Permission ACL entry - Egress Port == 1"
-	req = s1.get_new_write_request()
-	s1.push_update_add_entry_to_action(
-	    req,
-	    "egress.permission_acl_egress.permission_acl_egress_table",
-	    [s1.Exact("local_metadata.role_id", '\x01'), s1.Ternary("standard_metadata.egress_port", '\x00\x01', '\x01\xff')],
-	    "NoAction", [], 100)
-	s1.write_request(req)
+        print "Insert Ingress Permission ACL entry - Ingress Port == 2 role_id == 1"
+        req = s1.get_new_write_request()
+        s1.push_update_add_entry_to_action(
+            req,
+            "ingress.permission_acl_ingress.permission_acl_ingress_table",
+            [s1.Ternary("standard_metadata.ingress_port", '\x00\x02', '\x01\xff')],
+            "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
+        s1.write_request(req)
 
-	print "Insert Egress Permission ACL entry - Egress Port == 2"
-	req = s1.get_new_write_request()
-	s1.push_update_add_entry_to_action(
-	    req,
-	    "egress.permission_acl_egress.permission_acl_egress_table",
-	    [s1.Exact("local_metadata.role_id", '\x01'), s1.Ternary("standard_metadata.egress_port", '\x00\x02', '\x01\xff')],
-	    "NoAction", [], 100)
-	s1.write_request(req)
-	
-	# Set Table1 Flow entry
-	
-	print "Insert Table1 Flow Entry: Port1 => Port2"
-	req = s1.get_new_write_request()
-	s1.push_update_add_entry_to_action(
-	    req,
-	    "ingress.table1_control.table1",
-	    [s1.Ternary("standard_metadata.ingress_port", '\x00\x01', '\x01\xff')],
-	    "table1_control.set_egress_port", [("port", b'\x00\x02')], 100)
-	s1.write_request(req)
-	
-	print "Insert Table1 Flow Entry: Port2 => Port1"
-	req = s1.get_new_write_request()
-	s1.push_update_add_entry_to_action(
-	    req,
-	    "ingress.table1_control.table1",
-	    [s1.Ternary("standard_metadata.ingress_port", '\x00\x02', '\x01\xff')],
-	    "table1_control.set_egress_port", [("port", b'\x00\x01')], 100)
-	s1.write_request(req)
+        print "Insert Egress Permission ACL entry - Egress Port == 1"
+        req = s1.get_new_write_request()
+        s1.push_update_add_entry_to_action(
+            req,
+            "egress.permission_acl_egress.permission_acl_egress_table",
+            [s1.Exact("local_metadata.role_id", '\x01'), s1.Ternary("standard_metadata.egress_port", '\x00\x01', '\x01\xff')],
+            "NoAction", [], 100)
+        s1.write_request(req)
 
-	was_packetin = 0
-	wrote = 1
-	while 1:
-		packetin = s1.get_packet_in()
-		if was_packetin and not packetin and not wrote:
-			# Set flow rule to tableNCS
-            		print "Insert entry"
-            		req = s1.get_new_write_request()
-            		s1.push_update_add_entry_to_action(
-            		    req,
-            		    "ingress.permission_acl_ingress.permission_acl_ingress_table",
-            		    [s1.Exact("standard_metadata.ingress_port", '\x01', '\xff')],
-            		    "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
-            		s1.write_request(req)
-			wrote = 1			
-		was_packetin = 0
-		if packetin:
-			was_packetin = 1
-			# Print Packet from CPU_PORT of Switch
-			print " ".join("{:02x}".format(ord(c)) for c in packetin.payload)
-			
-			# Print metadatas:
-			# 	1. packet_in switch port (9 bits)
-			#	2. padding (7 bits)
-			for metadata_ in packetin.metadata:
-				print " ".join("{:02x}".format(ord(c)) for c in metadata_.value)
-		time.sleep(1)
+        print "Insert Egress Permission ACL entry - Egress Port == 2"
+        req = s1.get_new_write_request()
+        s1.push_update_add_entry_to_action(
+            req,
+            "egress.permission_acl_egress.permission_acl_egress_table",
+            [s1.Exact("local_metadata.role_id", '\x01'), s1.Ternary("standard_metadata.egress_port", '\x00\x02', '\x01\xff')],
+            "NoAction", [], 100)
+        s1.write_request(req)
+
+        # Set Table1 Flow entry
+
+        print "Insert Table1 Flow Entry: Port1 => Port2"
+        req = s1.get_new_write_request()
+        s1.push_update_add_entry_to_action(
+            req,
+            "ingress.table1_control.table1",
+            [s1.Ternary("standard_metadata.ingress_port", '\x00\x01', '\x01\xff')],
+            "table1_control.set_egress_port", [("port", b'\x00\x02')], 100)
+        s1.write_request(req)
+
+        print "Insert Table1 Flow Entry: Port2 => Port1"
+        req = s1.get_new_write_request()
+        s1.push_update_add_entry_to_action(
+            req,
+            "ingress.table1_control.table1",
+            [s1.Ternary("standard_metadata.ingress_port", '\x00\x02', '\x01\xff')],
+            "table1_control.set_egress_port", [("port", b'\x00\x01')], 100)
+        s1.write_request(req)
+
+        was_packetin = 0
+        wrote = 1
+        while 1:
+            packetin = s1.get_packet_in()
+            if was_packetin and not packetin and not wrote:
+                # Set flow rule to tableNCS
+                print "Insert entry"
+                req = s1.get_new_write_request()
+                s1.push_update_add_entry_to_action(
+                    req,
+                    "ingress.permission_acl_ingress.permission_acl_ingress_table",
+                    [s1.Exact("standard_metadata.ingress_port", '\x01', '\xff')],
+                    "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
+                s1.write_request(req)
+                wrote = 1
+            was_packetin = 0
+            if packetin:
+                was_packetin = 1
+                # Print Packet from CPU_PORT of Switch
+                print " ".join("{:02x}".format(ord(c)) for c in packetin.payload)
+
+                # Print metadatas:
+                #     1. packet_in switch port (9 bits)
+                #    2. padding (7 bits)
+                for metadata_ in packetin.metadata:
+                    print " ".join("{:02x}".format(ord(c)) for c in metadata_.value)
+            time.sleep(1)
 
     except Exception:
         raise
