@@ -65,6 +65,10 @@ def main():
                         help='Location of p4info proto in text format',
                         type=str, action="store", required=True, 
                         default='/home/sdn/onos/pipelines/basic/src/main/resources/p4c-out/bmv2/basic.p4info')
+    parser.add_argument('--config',
+                        help='Location of Target Dependant Binary',
+                        type=str, action="store",
+                        default='/home/sdn/onos/pipelines/basic/src/main/resources/p4c-out/bmv2/basic.json')
     parser.add_argument('--grpc-addr',
                         help='Address to use to connect to P4 Runtime server',
                         type=str, default='localhost:50051')
@@ -91,13 +95,16 @@ def main():
         print "Try to connect to P4Runtime Server"
         s1 = P4RuntimeClient(grpc_addr = args.grpc_addr, 
                              device_id = args.device_id, 
-                             cpu_port = args.cpu_port, 
+                             cpu_port = args.cpu_port,
+                             config_path = args.config,
                              p4info_path = args.p4info)
 
         roleconfig = s1.get_new_roleconfig()
         s1.add_roleconfig_entry(roleconfig, "ingress.table0_control.table0", 1)
         s1.add_roleconfig_entry(roleconfig, "ingress.table1_control.table1", 1)
         s1.handshake(roleconfig)
+        if not args.skip_config:
+            s1.update_config()
 
         # Set Permission ACL
         print "Insert Ingress Permission ACL entry - Ingress Port == 1 role_id == 1"

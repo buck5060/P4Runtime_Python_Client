@@ -34,6 +34,7 @@ import scapy.utils
 from google.rpc import status_pb2, code_pb2
 from p4.config.v1 import p4info_pb2
 from p4.v1 import p4runtime_pb2
+from p4.tmp import p4config_pb2
 
 # See https://gist.github.com/carymrobbins/8940382
 # functools.partialmethod is introduced in Python 3.4
@@ -120,7 +121,7 @@ class P4RuntimeWriteException(Exception):
         return message
 
 class P4RuntimeClient():
-    def __init__(self, grpc_addr, device_id , cpu_port, p4info_path):
+    def __init__(self, grpc_addr, device_id , cpu_port, config_path, p4info_path):
         self.grpc_addr = grpc_addr
         if self.grpc_addr is None:
             self.grpc_addr = 'localhost:50051'
@@ -132,6 +133,9 @@ class P4RuntimeClient():
         self.cpu_port = int(cpu_port)
         if self.cpu_port is None:
             print("CPU port is not set")
+
+        self.config_path = config_path
+        self.p4info_path = p4info_path
 
         self.channel = grpc.insecure_channel(self.grpc_addr)
         self.stub = p4runtime_pb2.P4RuntimeStub(self.channel)
@@ -147,8 +151,8 @@ class P4RuntimeClient():
         # autocleanup of tests (see definition of autocleanup decorator below)
         self.reqs = []
 
-        self.election_id = 1
-        self.role_id = 1
+        self.election_id = 87
+        self.role_id = 0
         self.set_up_stream()
 
     def import_p4info_names(self):
@@ -204,6 +208,53 @@ class P4RuntimeClient():
         rep = self.get_stream_packet("arbitration", timeout=2)
         if rep is None:
             print("Failed to establish handshake")
+
+    def build_bmv2_config(self):
+        """
+        Builds the device config for BMv2
+        """
+        device_config = p4config_pb2.P4DeviceConfig()
+        device_config.reassign = True
+        with open(self.config_path) as f:
+            device_config.device_data = f.read()
+        return device_config
+
+    # buggy function, need to be modify.
+    def build_tofino_config(prog_name, bin_path, cxt_json_path):
+        device_config = p4config_pb2.P4DeviceConfig()
+        with open(bin_path, 'rb') as bin_f:
+            with open(cxt_json_path, 'r') as cxt_json_f:
+                device_config.device_data = ""
+                device_config.device_data += struct.pack("<i", len(prog_name))
+                device_config.device_data += prog_name
+                tofino_bin = bin_f.read()
+                device_config.device_data += struct.pack("<i", len(tofino_bin))
+                device_config.device_data += tofino_bin
+                cxt_json = cxt_json_f.read()
+                device_config.device_data += struct.pack("<i", len(cxt_json))
+                device_config.device_data += cxt_json
+        return device_config
+
+    def update_config(self):
+        print("Setting Forwarding Pipeline")
+        request = p4runtime_pb2.SetForwardingPipelineConfigRequest()
+        request.device_id = self.device_id
+        election_id = request.election_id
+        election_id.high = 0
+        election_id.low = self.election_id
+        request.role_id = self.role_id
+        config = request.config
+        with open(self.p4info_path, 'r') as p4info_f:
+            google.protobuf.text_format.Merge(p4info_f.read(), config.p4info)
+        device_config = self.build_bmv2_config()
+        config.p4_device_config = device_config.SerializeToString()
+        request.action = p4runtime_pb2.SetForwardingPipelineConfigRequest.VERIFY_AND_COMMIT
+        try:
+            response = self.stub.SetForwardingPipelineConfig(request)
+        except Exception as e:
+            raise
+            return False
+        return True
 
     def tearDown(self):
         self.tear_down_stream()
