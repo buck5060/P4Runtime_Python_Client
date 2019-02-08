@@ -121,7 +121,7 @@ class P4RuntimeWriteException(Exception):
         return message
 
 class P4RuntimeClient():
-    def __init__(self, grpc_addr, device_id , cpu_port, config_path, p4info_path):
+    def __init__(self, grpc_addr, device_id , cpu_port, election_id, role_id, config_path, p4info_path):
         self.grpc_addr = grpc_addr
         if self.grpc_addr is None:
             self.grpc_addr = 'localhost:50051'
@@ -151,8 +151,8 @@ class P4RuntimeClient():
         # autocleanup of tests (see definition of autocleanup decorator below)
         self.reqs = []
 
-        self.election_id = 87
-        self.role_id = 0
+        self.election_id = election_id
+        self.role_id = role_id
         self.set_up_stream()
 
     def import_p4info_names(self):
@@ -192,13 +192,13 @@ class P4RuntimeClient():
             target=stream_recv, args=(self.stream,))
         self.stream_recv_thread.start()
 
-    def handshake(self, roleconfig):
+    def handshake(self, roleconfig = None):
         req = p4runtime_pb2.StreamMessageRequest()
         arbitration = req.arbitration
         arbitration.device_id = self.device_id
+        role = arbitration.role
+        role.id = self.role_id
         if roleconfig is not None:
-           role = arbitration.role
-           role.id = self.role_id
            role.config.Pack(roleconfig)
         election_id = arbitration.election_id
         election_id.high = 0
@@ -480,7 +480,7 @@ class P4RuntimeClient():
         except grpc.RpcError as e:
             if e.code() != grpc.StatusCode.UNKNOWN:
                 raise e
-   #    raise P4RuntimeWriteException(e)
+        raise P4RuntimeWriteException(e)
 
    # --- Table End ---
 

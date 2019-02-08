@@ -81,6 +81,12 @@ def main():
     parser.add_argument('--skip-config',
                         help='Assume a device with pipeline already configured',
                         action="store_true", default=False)
+    parser.add_argument('--election-id',
+                        help='ID for mastership election',
+                        type=int, required=True, default=False)
+    parser.add_argument('--role-id',
+                        help='ID for distinguish different client',
+                        type=int, required=True, default=False)
     args, unknown_args = parser.parse_known_args()
 
     # device = args.device
@@ -96,15 +102,18 @@ def main():
         s1 = P4RuntimeClient(grpc_addr = args.grpc_addr, 
                              device_id = args.device_id, 
                              cpu_port = args.cpu_port,
+                             election_id = args.election_id,
+                             role_id = args.role_id,
                              config_path = args.config,
                              p4info_path = args.p4info)
-
-        roleconfig = s1.get_new_roleconfig()
-        s1.add_roleconfig_entry(roleconfig, "ingress.table0_control.table0", 1)
-        s1.add_roleconfig_entry(roleconfig, "ingress.table1_control.table1", 1)
-        s1.handshake(roleconfig)
+        s1.handshake()
         if not args.skip_config:
             s1.update_config()
+            # Role config must be set after fwd pipeline or table info not appear in server may cause server crash.
+            roleconfig = s1.get_new_roleconfig()
+            s1.add_roleconfig_entry(roleconfig, "ingress.table0_control.table0", 1)
+            s1.add_roleconfig_entry(roleconfig, "ingress.table1_control.table1", 1)
+            s1.handshake(roleconfig)
 
         # Set Permission ACL
         print "Insert Ingress Permission ACL entry - Ingress Port == 1 role_id == 1"
@@ -152,7 +161,7 @@ def main():
             "_drop", [], 90)
         s1.write_request(req)
 
-        print "Insert Egress Permission ACL entry - Drop the other pkts Egress Port == 2"
+        print "Insert Egress Permission ACL entry - Drop the other pkts to Egress Port == 2"
         req = s1.get_new_write_request()
         s1.push_update_add_entry_to_action(
             req,
