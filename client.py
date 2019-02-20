@@ -56,7 +56,7 @@ def info(msg, *args, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compile the provided P4 program and run PTF tests on it")
+        description="A simple P4Runtime Client")
     parser.add_argument('--device',
                         help='Target device',
                         type=str, action="store", required=True,
