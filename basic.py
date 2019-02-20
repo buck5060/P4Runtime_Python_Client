@@ -22,6 +22,7 @@ import Queue
 import sys
 import threading
 import time
+import struct
 from StringIO import StringIO
 from collections import Counter
 from functools import wraps, partial
@@ -34,6 +35,7 @@ import scapy.utils
 from google.rpc import status_pb2, code_pb2
 from p4.config.v1 import p4info_pb2
 from p4.v1 import p4runtime_pb2
+from p4.tmp import p4config_pb2
 
 # See https://gist.github.com/carymrobbins/8940382
 # functools.partialmethod is introduced in Python 3.4
@@ -117,10 +119,10 @@ class P4RuntimeWriteException(Exception):
                 p4_error.canonical_code].name
             message += "\t* At index {}: {}, '{}'\n".format(
                 idx, code_name, p4_error.message)
-	return message
+        return message
 
 class P4RuntimeClient():
-    def __init__(self, grpc_addr, device_id , cpu_port, p4info_path):
+    def __init__(self, grpc_addr, device_id, device, election_id, role_id, config_path, p4info_path, ctx_json):
         self.grpc_addr = grpc_addr
         if self.grpc_addr is None:
             self.grpc_addr = 'localhost:50051'
@@ -129,9 +131,11 @@ class P4RuntimeClient():
         if self.device_id is None:
             print("Device ID is not set")
 
-        self.cpu_port = int(cpu_port)
-        if self.cpu_port is None:
-            print("CPU port is not set")
+        self.device = device
+
+        self.config_path = config_path
+        self.p4info_path = p4info_path
+        self.ctx_json_path = ctx_json
 
         self.channel = grpc.insecure_channel(self.grpc_addr)
         self.stub = p4runtime_pb2.P4RuntimeStub(self.channel)
@@ -147,8 +151,8 @@ class P4RuntimeClient():
         # autocleanup of tests (see definition of autocleanup decorator below)
         self.reqs = []
 
-        self.election_id = 1
-        self.role_id = 1
+        self.election_id = election_id
+        self.role_id = role_id
         self.set_up_stream()
 
     def import_p4info_names(self):
@@ -188,20 +192,71 @@ class P4RuntimeClient():
             target=stream_recv, args=(self.stream,))
         self.stream_recv_thread.start()
 
-        self.handshake()
-
-    def handshake(self):
+    def handshake(self, roleconfig = None):
         req = p4runtime_pb2.StreamMessageRequest()
         arbitration = req.arbitration
         arbitration.device_id = self.device_id
+        role = arbitration.role
+        role.id = self.role_id
+        if roleconfig is not None:
+           role.config.Pack(roleconfig)
         election_id = arbitration.election_id
         election_id.high = 0
         election_id.low = self.election_id
         self.stream_out_q.put(req)
-	
+
         rep = self.get_stream_packet("arbitration", timeout=2)
         if rep is None:
             print("Failed to establish handshake")
+
+    def build_bmv2_config(self):
+        """
+        Builds the device config for BMv2
+        """
+        device_config = p4config_pb2.P4DeviceConfig()
+        device_config.reassign = True
+        with open(self.config_path) as f:
+            device_config.device_data = f.read()
+        return device_config
+
+    def build_tofino_config(self, prog_name, bin_path, cxt_json_path):
+        device_config = p4config_pb2.P4DeviceConfig()
+        with open(bin_path, 'rb') as bin_f:
+            with open(cxt_json_path, 'r') as cxt_json_f:
+                device_config.device_data = ""
+                device_config.device_data += struct.pack("<i", len(prog_name))
+                device_config.device_data += prog_name
+                tofino_bin = bin_f.read()
+                device_config.device_data += struct.pack("<i", len(tofino_bin))
+                device_config.device_data += tofino_bin
+                cxt_json = cxt_json_f.read()
+                device_config.device_data += struct.pack("<i", len(cxt_json))
+                device_config.device_data += cxt_json
+        return device_config
+
+    def update_config(self):
+        print("Setting Forwarding Pipeline")
+        request = p4runtime_pb2.SetForwardingPipelineConfigRequest()
+        request.device_id = self.device_id
+        election_id = request.election_id
+        election_id.high = 0
+        election_id.low = self.election_id
+        request.role_id = self.role_id
+        config = request.config
+        with open(self.p4info_path, 'r') as p4info_f:
+            google.protobuf.text_format.Merge(p4info_f.read(), config.p4info)
+        if self.device == "bmv2":
+            device_config = self.build_bmv2_config()
+        else:
+            device_config = self.build_tofino_config("name", self.config_path, self.ctx_json_path)
+        config.p4_device_config = device_config.SerializeToString()
+        request.action = p4runtime_pb2.SetForwardingPipelineConfigRequest.VERIFY_AND_COMMIT
+        try:
+            response = self.stub.SetForwardingPipelineConfig(request)
+        except Exception as e:
+            raise
+            return False
+        return True
 
     def tearDown(self):
         self.tear_down_stream()
@@ -209,8 +264,8 @@ class P4RuntimeClient():
     def tear_down_stream(self):
         self.stream_out_q.put(None)
         self.stream_recv_thread.join()
-	sys.exit(0)
-	
+        sys.exit(0)
+
     # --- Packet IO ---
 
     def get_packet_in(self, timeout=2):
@@ -218,7 +273,7 @@ class P4RuntimeClient():
         if msg is None:
             print("Packet in not received")
         else:
-	    print("Packet mon Getcha !")
+            print("Packet mon Getcha !")
             return msg.packet
 
     def get_stream_packet(self, type_, timeout=1):
@@ -236,12 +291,26 @@ class P4RuntimeClient():
             pass
         return None
 
+    # [TODO] Implement not complete yet
     def send_packet_out(self, packet):
         packet_out_req = p4runtime_pb2.StreamMessageRequest()
         packet_out_req.packet.CopyFrom(packet)
         self.stream_out_q.put(packet_out_req)
 
    # --- Packet IO End ---
+
+   # --- Role.config ---
+    def get_new_roleconfig(self):
+        config = p4runtime_pb2.RoleConfig()
+        return config
+
+    def add_roleconfig_entry(self, config, table_name, isShared):
+        entry = config.entries.add()
+        entry.shared = isShared
+        table_entry = entry.entity.table_entry
+        table_entry.table_id = self.get_table_id(table_name)
+
+   # --- End of Role ---
 
    # --- Table ---
 
@@ -379,7 +448,7 @@ class P4RuntimeClient():
     # Sets the action & action data for a p4::TableEntry object. params needs to
     # be an iterable object of 2-tuples (<param_name>, <value>).
     def set_action_entry(self, table_entry, a_name, params):
-	self.set_action(table_entry.action.action, a_name, params)
+        self.set_action(table_entry.action.action, a_name, params)
 
     def get_new_write_request(self):
         req = p4runtime_pb2.WriteRequest()
@@ -388,7 +457,7 @@ class P4RuntimeClient():
         election_id = req.election_id
         election_id.high = 0
         election_id.low = self.election_id
-	return req
+        return req
 
     def push_update_add_entry_to_action(self, req, t_name, mk, a_name, params, priority):
         update = req.updates.add()
@@ -400,13 +469,13 @@ class P4RuntimeClient():
             table_entry.is_default_action = True
         else:
             self.set_match_key(table_entry, t_name, mk)
-	self.set_action_entry(table_entry, a_name, params)
+        self.set_action_entry(table_entry, a_name, params)
 
     def write_request(self, req, store=True):
         rep = self._write(req)
         if store:
             self.reqs.append(req)
-	return rep
+        return rep
 
     def _write(self, req):
         try:
@@ -414,7 +483,7 @@ class P4RuntimeClient():
         except grpc.RpcError as e:
             if e.code() != grpc.StatusCode.UNKNOWN:
                 raise e
-	#    raise P4RuntimeWriteException(e)
+        raise P4RuntimeWriteException(e)
 
    # --- Table End ---
 
@@ -433,4 +502,4 @@ for obj_type, nickname in [("tables", "table"),
         P4RuntimeClient.get_obj, obj_type))
     name = "_".join(["get", nickname, "id"])
     setattr(P4RuntimeClient, name, partialmethod(
-	P4RuntimeClient.get_obj_id, obj_type))
+    P4RuntimeClient.get_obj_id, obj_type))
