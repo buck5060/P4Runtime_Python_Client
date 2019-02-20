@@ -22,6 +22,7 @@ import Queue
 import sys
 import threading
 import time
+import struct
 from StringIO import StringIO
 from collections import Counter
 from functools import wraps, partial
@@ -121,7 +122,7 @@ class P4RuntimeWriteException(Exception):
         return message
 
 class P4RuntimeClient():
-    def __init__(self, grpc_addr, device_id , cpu_port, election_id, role_id, config_path, p4info_path):
+    def __init__(self, grpc_addr, device_id, device, election_id, role_id, config_path, p4info_path, ctx_json):
         self.grpc_addr = grpc_addr
         if self.grpc_addr is None:
             self.grpc_addr = 'localhost:50051'
@@ -130,12 +131,11 @@ class P4RuntimeClient():
         if self.device_id is None:
             print("Device ID is not set")
 
-        self.cpu_port = int(cpu_port)
-        if self.cpu_port is None:
-            print("CPU port is not set")
+        self.device = device
 
         self.config_path = config_path
         self.p4info_path = p4info_path
+        self.ctx_json_path = ctx_json
 
         self.channel = grpc.insecure_channel(self.grpc_addr)
         self.stub = p4runtime_pb2.P4RuntimeStub(self.channel)
@@ -219,8 +219,7 @@ class P4RuntimeClient():
             device_config.device_data = f.read()
         return device_config
 
-    # buggy function, need to be modify.
-    def build_tofino_config(prog_name, bin_path, cxt_json_path):
+    def build_tofino_config(self, prog_name, bin_path, cxt_json_path):
         device_config = p4config_pb2.P4DeviceConfig()
         with open(bin_path, 'rb') as bin_f:
             with open(cxt_json_path, 'r') as cxt_json_f:
@@ -246,7 +245,10 @@ class P4RuntimeClient():
         config = request.config
         with open(self.p4info_path, 'r') as p4info_f:
             google.protobuf.text_format.Merge(p4info_f.read(), config.p4info)
-        device_config = self.build_bmv2_config()
+        if self.device == "bmv2":
+            device_config = self.build_bmv2_config()
+        else:
+            device_config = self.build_tofino_config("name", self.config_path, self.ctx_json_path)
         config.p4_device_config = device_config.SerializeToString()
         request.action = p4runtime_pb2.SetForwardingPipelineConfigRequest.VERIFY_AND_COMMIT
         try:
@@ -289,6 +291,7 @@ class P4RuntimeClient():
             pass
         return None
 
+    # [TODO] Implement not complete yet
     def send_packet_out(self, packet):
         packet_out_req = p4runtime_pb2.StreamMessageRequest()
         packet_out_req.packet.CopyFrom(packet)
