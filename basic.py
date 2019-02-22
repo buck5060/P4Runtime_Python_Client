@@ -37,6 +37,8 @@ from p4.config.v1 import p4info_pb2
 from p4.v1 import p4runtime_pb2
 from p4.tmp import p4config_pb2
 
+import helper 
+
 # See https://gist.github.com/carymrobbins/8940382
 # functools.partialmethod is introduced in Python 3.4
 class partialmethod(partial):
@@ -144,6 +146,8 @@ class P4RuntimeClient():
         self.p4info = p4info_pb2.P4Info()
         with open(p4info_path, "rb") as fin:
             google.protobuf.text_format.Merge(fin.read(), self.p4info)
+
+        self.p4info_helper = helper.P4InfoHelper(p4info_path)
 
         self.import_p4info_names()
 
@@ -271,7 +275,7 @@ class P4RuntimeClient():
     def get_packet_in(self, timeout=2):
         msg = self.get_stream_packet("packet", timeout)
         if msg is None:
-            print("Packet in not received")
+            print("Packet in not received\r")
         else:
             print("Packet mon Getcha !")
             return msg.packet
@@ -435,6 +439,10 @@ class P4RuntimeClient():
     # object of MF instances
     def set_match_key(self, table_entry, t_name, mk):
        for mf in mk:
+           if "role_id" in mf.name:
+               if ord(mf.v) != self.role_id and self.role_id is not 0:
+                   print("Wrong Role_ID in flow rule!!")
+                   return
            mf_id = self.get_mf_id(t_name, mf.name)
            mf.add_to(mf_id, table_entry.match)
 
@@ -484,6 +492,22 @@ class P4RuntimeClient():
             if e.code() != grpc.StatusCode.UNKNOWN:
                 raise e
         raise P4RuntimeWriteException(e)
+
+    def ReadTableEntries(self, table_id=None, dry_run=False):
+        request = p4runtime_pb2.ReadRequest()
+        request.device_id = self.device_id
+        request.role_id = self.role_id
+        entity = request.entities.add()
+        table_entry = entity.table_entry
+        if table_id is not None:
+            table_entry.table_id = table_id
+        else:
+            table_entry.table_id = 0
+        if dry_run:
+            print "P4Runtime Read:", request
+        else:
+            for response in self.stub.Read(request):
+                yield response
 
    # --- Table End ---
 
