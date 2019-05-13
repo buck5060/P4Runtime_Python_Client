@@ -24,6 +24,7 @@ import struct
 import subprocess
 import sys
 import threading
+import datetime
 from collections import OrderedDict
 import time
 from StringIO import StringIO
@@ -93,6 +94,8 @@ def main():
 	was_packetin = 0
 	wrote = 0
 	while 1:
+		s1.packetin_rdy.wait()
+		print(datetime.datetime.now(), "Looking queue")
 		packetin = s1.get_packet_in()
 		if was_packetin and not packetin and not wrote:
 			# Set flow rule to tableNCS
@@ -103,6 +106,7 @@ def main():
             		    "ingress.tableNCS_control.tableNCS",
             		    [s1.Ternary("hdr.ipv4.protocol", '\x01', '\xff')],
             		    #"_drop", [], 70000)
+			    # Change the action to "send_to_cpu, no need the parameter array"
             		    "tableNCS_control.set_egress_port", [("port", b'\x00\x03')], 100)
             		s1.write_request(req)
 			wrote = 1			
@@ -110,6 +114,7 @@ def main():
 		if packetin:
 			was_packetin = 1
 			# Print Packet from CPU_PORT of Switch
+			print("Got a packet.")
 			print " ".join("{:02x}".format(ord(c)) for c in packetin.payload)
 			
 			# Print metadatas:
@@ -117,6 +122,7 @@ def main():
 			#	2. padding (7 bits)
 			for metadata_ in packetin.metadata:
 				print " ".join("{:02x}".format(ord(c)) for c in metadata_.value)
+		s1.packetin_rdy.clear();
 		time.sleep(1)
 
     except Exception:
