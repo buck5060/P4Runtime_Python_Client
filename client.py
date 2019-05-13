@@ -140,94 +140,187 @@ def main():
                              p4info_path = args.p4info,
                              ctx_json = args.ctx_json)
         s1.handshake()
-        if not args.skip_config:
+        if not args.skip_config and args.role_id is 0:
             s1.update_config()
 
-        if not args.skip_role_config:
+        if not args.skip_role_config and args.role_id is 0:
             # Role config must be set after fwd pipeline or table info not appear in server may cause server crash.
             roleconfig = s1.get_new_roleconfig()
             s1.add_roleconfig_entry(roleconfig, "ingress.table0_control.table0", 1)
             s1.add_roleconfig_entry(roleconfig, "ingress.table1_control.table1", 1)
             s1.handshake(roleconfig)
 
-        # Set Permission ACL
-        print "Insert Ingress Permission ACL entry - Ingress Port == 1 role_id == 1"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "ingress.permission_acl_ingress.permission_acl_ingress_table",
-            [s1.Exact("standard_metadata.ingress_port", '\x00\x01')],
-            "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
-        s1.write_request(req)
+        if args.role_id is 0:
+            # Set Permission ACL
+            print "Ingress Permission ACL entry - Ingress Port == 1 role_id == 1"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.permission_acl_ingress.permission_acl_ingress_table",
+                [s1.Exact("standard_metadata.ingress_port", '\x00\x01')],
+                "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
+            s1.write_request(req)
 
-        print "Insert Ingress Permission ACL entry - Ingress Port == 2 role_id == 1"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "ingress.permission_acl_ingress.permission_acl_ingress_table",
-            [s1.Exact("standard_metadata.ingress_port", '\x00\x02')],
-            "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
-        s1.write_request(req)
+            print "Ingress Permission ACL entry - Ingress Port == 2 role_id == 1"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.permission_acl_ingress.permission_acl_ingress_table",
+                [s1.Exact("standard_metadata.ingress_port", '\x00\x02')],
+                "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
+            s1.write_request(req)
 
-        print "Insert Egress Permission ACL entry - Permit role 1 to Egress Port == 1"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "egress.permission_acl_egress.permission_acl_egress_table",
-            [s1.Ternary("local_metadata.role_id", '\x01', '\x7f'),
-             s1.Ternary("standard_metadata.egress_port", '\x00\x01', '\x01\xff')],
-            "NoAction", [], 100)
-        s1.write_request(req)
+            print "Ingress Permission ACL entry - Ingress Port == 3 role_id == 1"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.permission_acl_ingress.permission_acl_ingress_table",
+                [s1.Exact("standard_metadata.ingress_port", '\x00\x03')],
+                "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x01')], 100)
+            s1.write_request(req)
 
-        print "Insert Egress Permission ACL entry - Permit role 1 to Egress Port == 2"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "egress.permission_acl_egress.permission_acl_egress_table",
-            [s1.Ternary("local_metadata.role_id", '\x01', '\x7f'),
-             s1.Ternary("standard_metadata.egress_port", '\x00\x02', '\x01\xff')],
-            "NoAction", [], 100)
-        s1.write_request(req)
+            print "Egress Permission ACL entry - Permit role 1 to Egress Port == 1"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("local_metadata.role_id", '\x01', '\x7f'),
+                s1.Ternary("standard_metadata.egress_port", '\x00\x01', '\x01\xff')],
+                "NoAction", [], 100)
+            s1.write_request(req)
 
-        print "Insert Egress Permission ACL entry - Drop the other pkts to Egress Port == 1"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "egress.permission_acl_egress.permission_acl_egress_table",
-            [s1.Ternary("standard_metadata.egress_port", '\x00\x01', '\x01\xff')],
-            "_drop", [], 90)
-        s1.write_request(req)
+            print "Egress Permission ACL entry - Permit role 1 to Egress Port == 2"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("local_metadata.role_id", '\x01', '\x7f'),
+                s1.Ternary("standard_metadata.egress_port", '\x00\x02', '\x01\xff')],
+                "NoAction", [], 100)
+            s1.write_request(req)
 
-        print "Insert Egress Permission ACL entry - Drop the other pkts to Egress Port == 2"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "egress.permission_acl_egress.permission_acl_egress_table",
-            [s1.Ternary("standard_metadata.egress_port", '\x00\x02', '\x01\xff')],
-            "_drop", [], 90)
-        s1.write_request(req)
+            print "Egress Permission ACL entry - Permit role 1 to Egress Port == 3"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("local_metadata.role_id", '\x01', '\x7f'),
+                s1.Ternary("standard_metadata.egress_port", '\x00\x03', '\x01\xff')],
+                "NoAction", [], 100)
+            s1.write_request(req)
+            
+            print "Egress Permission ACL entry - Drop the other pkts to Egress Port == 1"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("standard_metadata.egress_port", '\x00\x01', '\x01\xff')],
+                "_drop", [], 90)
+            s1.write_request(req)
 
-        # Set Table1 Flow entry
+            print "Egress Permission ACL entry - Drop the other pkts to Egress Port == 2"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("standard_metadata.egress_port", '\x00\x02', '\x01\xff')],
+                "_drop", [], 90)
+            s1.write_request(req)
 
-        print "Insert Table1 Flow Entry: Port1 => Port2"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "ingress.table1_control.table1",
-            [s1.Ternary("standard_metadata.ingress_port", '\x00\x01', '\x01\xff'),
-             s1.Ternary("local_metadata.role_id", '\x01', '\x7f') ],
-            "table1_control.set_egress_port", [("port", b'\x00\x02')], 100)
-        s1.write_request(req)
+            print "Egress Permission ACL entry - Drop the other pkts to Egress Port == 3"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("standard_metadata.egress_port", '\x00\x03', '\x01\xff')],
+                "_drop", [], 90)
+            s1.write_request(req)
 
-        print "Insert Table1 Flow Entry: Port2 => Port1"
-        req = s1.get_new_write_request()
-        s1.push_update_add_entry_to_action(
-            req,
-            "ingress.table1_control.table1",
-            [s1.Ternary("standard_metadata.ingress_port", '\x00\x02', '\x01\xff'),
-             s1.Ternary("local_metadata.role_id", '\x01', '\x7f') ],
-            "table1_control.set_egress_port", [("port", b'\x00\x01')], 100)
-        s1.write_request(req)
+            #--------
+
+            print "Ingress Permission ACL entry - Ingress Port == 4 role_id == 2"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.permission_acl_ingress.permission_acl_ingress_table",
+                [s1.Exact("standard_metadata.ingress_port", '\x00\x04')],
+                "permission_acl_ingress.set_user_pipeline_id_and_role_id", [("p_id", b'\x01'), ("r_id", b'\x02')], 100)
+            s1.write_request(req)
+
+            print "Egress Permission ACL entry - Permit role 2 to Egress Port == 4"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("local_metadata.role_id", '\x02', '\x7f'),
+                s1.Ternary("standard_metadata.egress_port", '\x00\x04', '\x01\xff')],
+                "NoAction", [], 100)
+            s1.write_request(req)
+
+            print "Egress Permission ACL entry - Drop the other pkts to Egress Port == 4"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "egress.permission_acl_egress.permission_acl_egress_table",
+                [s1.Ternary("standard_metadata.egress_port", '\x00\x04', '\x01\xff')],
+                "_drop", [], 90)
+            s1.write_request(req)
+
+        if args.role_id is 1:
+            # Set Table1 Flow entry
+
+            print "Table1 Flow Entry: 10.0.0.4 => Port1"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.table1_control.table1",
+                [s1.Ternary("hdr.ipv4.dst_addr", '\x0a\x00\x00\x04', '\xff\xff\xff\xff'),
+                s1.Ternary("local_metadata.role_id", '\x01', '\x7f') ],
+                "table1_control.set_egress_port", [("port", b'\x00\x01')], 100)
+            s1.write_request(req)
+
+            print "Table1 Flow Entry: 10.0.0.3 => Port2"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.table1_control.table1",
+                [s1.Ternary("hdr.ipv4.dst_addr", '\x0a\x00\x00\x03', '\xff\xff\xff\xff'),
+                s1.Ternary("local_metadata.role_id", '\x01', '\x7f') ],
+                "table1_control.set_egress_port", [("port", b'\x00\x02')], 100)
+            s1.write_request(req)
+
+            print "Table1 Flow Entry: 10.0.0.2 => Port3"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.table1_control.table1",
+                [s1.Ternary("hdr.ipv4.dst_addr", '\x0a\x00\x00\x02', '\xff\xff\xff\xff'),
+                s1.Ternary("local_metadata.role_id", '\x01', '\x7f') ],
+                "table1_control.set_egress_port", [("port", b'\x00\x03')], 100)
+            s1.write_request(req)
+
+            print "[Wrong Flow Entry] Table1 Flow Entry: 10.0.0.1 => Port4"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.table1_control.table1",
+                [s1.Ternary("hdr.ipv4.dst_addr", '\x0a\x00\x00\x01', '\xff\xff\xff\xff'),
+                s1.Ternary("local_metadata.role_id", '\x01', '\x7f') ],
+                "table1_control.set_egress_port", [("port", b'\x00\x04')], 100)
+            s1.write_request(req)
+
+        if args.role_id is 2:
+            # Set Table1 Flow entry
+
+            print "Table1 Flow Entry: Port4 => CPU"
+            req = s1.get_new_write_request()
+            s1.push_update_add_entry_to_action(
+                req,
+                "ingress.table1_control.table1",
+                [s1.Ternary("standard_metadata.ingress_port", '\x00\x04', '\x01\xff'),
+                s1.Ternary("local_metadata.role_id", '\x02', '\x7f') ],
+                "table1_control.send_to_cpu", [], 100)
+            s1.write_request(req)
 
         readTableRules(s1)
 
