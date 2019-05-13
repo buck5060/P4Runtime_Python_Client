@@ -22,6 +22,7 @@ import Queue
 import sys
 import threading
 import time
+import datetime
 import struct
 from StringIO import StringIO
 from collections import Counter
@@ -179,7 +180,7 @@ class P4RuntimeClient():
     def set_up_stream(self):
         self.stream_out_q = Queue.Queue()
         self.stream_in_q = Queue.Queue()
-
+	self.packetin_rdy = threading.Event()
         def stream_req_iterator():
             while True:
                 p = self.stream_out_q.get()
@@ -190,6 +191,8 @@ class P4RuntimeClient():
         def stream_recv(stream):
             for p in stream:
                 self.stream_in_q.put(p)
+		print(datetime.datetime.now(), "Something is going into queue")
+		# self.packetin_rdy.set()
 
         self.stream = self.stub.StreamChannel(stream_req_iterator())
         self.stream_recv_thread = threading.Thread(
