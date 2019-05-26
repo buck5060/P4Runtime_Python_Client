@@ -233,6 +233,7 @@ def main():
         readTableRules(s1)
 
         while 1:
+            s1.packetin_rdy.wait()
             packetin = s1.get_packet_in()
             if packetin:
                 # Print Packet from CPU_PORT of Switch
@@ -243,7 +244,6 @@ def main():
                 #     2. padding (7 bits)
                 for metadata_ in packetin.metadata:
                     print " ".join("{:02x}".format(ord(c)) for c in metadata_.value)
-            time.sleep(1)
 
     except Exception:
         raise
