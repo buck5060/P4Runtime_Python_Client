@@ -40,6 +40,15 @@ from p4.tmp import p4config_pb2
 
 import helper 
 
+# Convert integer (with length) to binary byte string
+# Equivalent to Python 3.2 int.to_bytes
+# See
+# https://stackoverflow.com/questions/16022556/has-python-3-to-bytes-been-back-ported-to-python-2-7
+def stringify(n, length):
+    h = '%x' % n
+    s = ('0' * (len(h) % 2) + h).zfill(length * 2).decode('hex')
+    return s
+
 # See https://gist.github.com/carymrobbins/8940382
 # functools.partialmethod is introduced in Python 3.4
 class partialmethod(partial):
@@ -180,7 +189,7 @@ class P4RuntimeClient():
     def set_up_stream(self):
         self.stream_out_q = Queue.Queue()
         self.stream_in_q = Queue.Queue()
-	self.packetin_rdy = threading.Event()
+        self.packetin_rdy = threading.Event()
         def stream_req_iterator():
             while True:
                 p = self.stream_out_q.get()
@@ -191,8 +200,8 @@ class P4RuntimeClient():
         def stream_recv(stream):
             for p in stream:
                 self.stream_in_q.put(p)
-		print(datetime.datetime.now(), "Something is going into queue")
-		# self.packetin_rdy.set()
+            print(datetime.datetime.now(), "Something is going into queue")
+            self.packetin_rdy.set()
 
         self.stream = self.stub.StreamChannel(stream_req_iterator())
         self.stream_recv_thread = threading.Thread(
@@ -299,9 +308,17 @@ class P4RuntimeClient():
         return None
 
     # [TODO] Implement not complete yet
-    def send_packet_out(self, packet):
+    def send_packet_out(self, pkt, port):
         packet_out_req = p4runtime_pb2.StreamMessageRequest()
-        packet_out_req.packet.CopyFrom(packet)
+
+        port_hex = stringify(port, 2)
+        packet_out = p4runtime_pb2.PacketOut()
+        packet_out.payload = str(pkt)
+        egress_physical_port = packet_out.metadata.add()
+        egress_physical_port.metadata_id = 1
+        egress_physical_port.value = port_hex
+
+        packet_out_req.packet.CopyFrom(packet_out)
         self.stream_out_q.put(packet_out_req)
 
    # --- Packet IO End ---
