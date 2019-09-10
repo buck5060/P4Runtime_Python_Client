@@ -40,7 +40,7 @@ python client.py --device-id 1 --device bmv2 --grpc-addr 127.0.0.1:54717 --elect
 ```
 
 - Clients I found and Referenced:
-    - Python: I ref code in [1] for this program. [2] uses the very old version P4runtime.proto but it's OK for simple demo.
+    - Python: I ref code in [1] for this program. [2] 
     - C++: [3] uses simple_switch(not simple_swithc_grpc) as simulation environment, which use nanomsg for Packet IO(i.e. packet in/out). Currently, Packet IO is transmit with [GRPC stream](https://github.com/p4lang/p4runtime/blob/4650de4734376e33357da1662e2635930342c876/proto/p4/v1/p4runtime.proto#L513)
     - Java: [4] Which is too hard for me to understand. @@
 
